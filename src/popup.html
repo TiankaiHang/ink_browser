@@ -1,0 +1,18 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>墨阅 · Ink</title><link rel="stylesheet" href="ui.css"></head>
+<body class="popup">
+  <header class="popup-header"><div class="brand"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" stroke="#c1d4a650"/><path d="M10 10v12m6-15v18m6-13v8" stroke="#c1d4a6" stroke-width="2" stroke-linecap="round"/></svg><span>墨阅 <small>INK</small></span></div><span class="badge">轻一点，读久一点</span></header>
+  <div class="eyebrow">A quieter reading space</div><h1>让光线轻一点。</h1><p class="intro">深色阅读，柔和材质。<br>文字清晰，图片依然是原来的颜色。</p>
+  <section class="preview" aria-label="当前材质预览"><small>READ SLOWLY, SEE CLEARLY</small><h2>把喧嚣留在页面之外。</h2><p>一页文字，一点安静。<br>在柔和的光里，继续读下去。</p><div class="color-chip" aria-label="图片色彩保持原样" role="img"></div></section>
+  <div class="section-label"><span>阅读材质</span><span id="material-name">深色纸张</span></div>
+  <div class="materials" aria-label="阅读材质"><button class="material" data-material="black" aria-pressed="false"><span class="swatch black"></span>纯黑</button><button class="material" data-material="frost" aria-pressed="false"><span class="swatch frost"></span>磨砂</button><button class="material" data-material="paper" aria-pressed="true"><span class="swatch paper"></span>纸张</button></div>
+  <div class="settings">
+    <label class="setting"><span><strong>开启墨阅</strong><small>为阅读留一盏柔光</small></span><input id="enabled" class="toggle" type="checkbox" checked></label>
+    <label class="setting"><span><strong>网页深色模式</strong><small>背景与文字改色，图片保留原色</small></span><input id="webEnabled" class="toggle" type="checkbox" checked></label>
+    <label class="setting"><span><strong>自动接管 PDF</strong><small>在线文档与本地文件，统一阅读</small></span><input id="pdfEnabled" class="toggle" type="checkbox" checked></label>
+  </div>
+  <div class="site-row"><span id="site">当前页面</span><button id="site-toggle" disabled>暂停此网站</button></div>
+  <button id="open-reader" class="primary">打开 PDF 阅读器 ↗</button>
+  <p id="file-note" class="note" hidden>自动打开本地 PDF，需在扩展详情开启「允许访问文件网址」。<button id="extension-settings" class="text-button">前往设置</button>。也可以直接在阅读器选择文件。</p>
+  <p id="popup-status" role="status" aria-live="polite"></p>
+  <script src="popup.js" type="module"></script>
+</body></html>

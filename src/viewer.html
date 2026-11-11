@@ -1,0 +1,23 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>墨阅 · PDF 阅读器</title><link rel="stylesheet" href="ui.css"></head>
+<body>
+  <header class="toolbar"><div class="toolbar-start"><div class="brand"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" stroke="#c1d4a650"/><path d="M10 10v12m6-15v18m6-13v8" stroke="#c1d4a6" stroke-width="2" stroke-linecap="round"/></svg><span>墨阅 <small>INK</small></span></div><span id="doc-title" class="doc-title">你的安静阅读空间</span></div>
+  <nav class="tools" aria-label="PDF 阅读工具">
+    <button id="previous" title="上一页" aria-label="上一页" disabled>‹</button><label class="page-count"><input id="page-number" type="number" min="1" value="1" aria-label="页码" disabled> / <span id="page-total">—</span></label><button id="next" title="下一页" aria-label="下一页" disabled>›</button><span class="divider"></span>
+    <button id="zoom-out" aria-label="缩小" title="缩小（Ctrl／⌘ + 滚轮）" disabled>−</button><button id="zoom" title="点击适应宽度 · Ctrl／⌘ + 0" disabled>适宽</button><button id="zoom-in" aria-label="放大" title="放大（Ctrl／⌘ + 滚轮）" disabled>＋</button><span class="divider"></span>
+    <select id="material" aria-label="阅读材质"><option value="black">纯黑</option><option value="frost">磨砂</option><option value="paper">纸张</option></select>
+    <button id="original" aria-pressed="false" disabled>查看原色</button><button id="download" disabled>下载</button><button id="open-file">打开文件</button>
+  </nav></header>
+  <div class="progress-track" aria-hidden="true"><div id="progress" class="progress-bar"></div></div>
+  <main class="reader-main">
+    <section id="welcome" class="welcome"><div class="eyebrow">Make room for reading</div><h1>一页文字，<br>也可以很安静。</h1><p class="lead">给 PDF 换一张深色的纸。<br>柔白的文字，熟悉的色彩，还有少一点的屏幕亮光。</p>
+      <button id="choose-file" class="drop-zone"><strong>把 PDF 放在这里</strong><span>拖入文件，或点击选择 · 在本机处理</span></button>
+      <form id="url-form" class="url-form"><input id="pdf-url" type="url" placeholder="也可以粘贴在线 PDF 链接" aria-label="在线 PDF 链接" required><button type="submit">打开链接 ↗</button></form>
+      <div class="features"><div><h3>图片保留原色</h3><p>照片与插图沿用原始色彩。<br>扫描件也会保持原样。</p></div><div><h3>三种阅读材质</h3><p>纯黑、磨砂、深色纸张。<br>找到眼睛喜欢的那一种。</p></div><div><h3>文件留在本机</h3><p>无需上传，也不需要账号。<br>离线也能继续阅读。</p></div></div>
+    </section>
+    <section id="pages" class="pdf-pages" aria-label="PDF 页面" hidden></section>
+  </main>
+  <div id="status" class="reader-status" role="status" aria-live="polite"></div>
+  <input id="file-input" type="file" accept="application/pdf,.pdf" hidden>
+  <dialog id="password-dialog"><form id="password-form"><h2>这份 PDF 需要密码</h2><p id="password-message">密码只用于在本机解锁这份文件。</p><input id="password" type="password" aria-label="PDF 密码" required autocomplete="off"><div class="actions"><button id="cancel-password" type="button">取消</button><button type="submit">解锁</button></div></form></dialog>
+  <script type="module" src="viewer.js"></script>
+</body></html>

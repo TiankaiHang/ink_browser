@@ -1,0 +1,82 @@
+# 墨阅 · Ink
+
+Chrome / Microsoft Edge 的 Manifest V3 浏览器扩展。网页和 PDF 使用深色背景、柔白文字，默认保留照片与插图原色。提供纯黑、磨砂、深色纸张三种外观，默认深色纸张。
+
+## 直接安装
+
+仓库包含可直接加载的 [`extension`](./extension) 文件夹。克隆仓库或下载仓库源码后即可安装，不需要先安装 Node.js 或运行构建命令。依赖目录、打包压缩文件及测试产物不纳入版本控制。
+
+1. 在 Edge 打开 `edge://extensions`，或在 Chrome 打开 `chrome://extensions`。
+2. 开启「开发人员模式」，选择「加载解压缩的扩展程序」。
+3. 选择项目中的 `extension` 文件夹。
+4. 打开「墨阅 · Ink」的扩展详情，开启「允许访问文件网址」，才能自动接管 `file://` 本地 PDF。
+5. 把墨阅固定到工具栏。刷新已打开的网页；重新打开已在浏览器内置阅读器中的 PDF。
+
+**无须文件网址权限的方式**：点击扩展弹窗「打开 PDF 阅读器」，再选择或拖入本地 PDF。文件只在本机读取，不会上传。
+
+## 已实现
+
+- 普通网页使用 Dark Reader 动态改色。关闭图片分析，不对图片、视频或 Canvas 应用反色。动态网页会跟随改色。
+- 三种材质：纯黑是黑底浅白字；磨砂使用冷灰色背景及磨砂工具栏；纸张使用暖灰黑底、柔白字与细微纸纹。
+- PDF 使用随扩展打包的 PDF.js。转换中性文字和实色矢量绘制颜色；浅彩色表格底纹转成保留色调的暗底，栅格图片直接使用原始像素。纸纹是背景填充，不是盖在内容上方的滤镜。
+- 在线 PDF 根据响应的 `Content-Type: application/pdf` 自动接管，包括地址不以 `.pdf` 结尾的链接。保留 URL 查询参数及 `#page=`。
+- 本地 `.pdf` 地址自动接管（需文件网址权限），支持选择文件、拖入文件。
+- PDF 连续滚动、页码跳转、缩放、适宽、文字选择、原色对照、下载原文件、输入加密文件密码。支持 Ctrl／⌘ + 滚轮、触控板捏合，以及 Ctrl／⌘ + 加减号缩放，Ctrl／⌘ + 0 适宽。缩放范围 35%～500%，以鼠标位置为锚点，受滚动边界限制。只渲染附近页面，单页画布限制像素数。
+- 全局开关、网页开关、PDF 开关、按网站暂停；设置保存在浏览器本机。
+
+## 已知边界
+
+- **扫描 PDF 是整张图片**。无法在保留整张图片原色的同时单独改掉扫描文字。因此默认保留原图，阅读器会提示；不包含 OCR。
+- 灰度矢量插图与正文使用相同的绘制命令，可能随正文改色。饱和彩色矢量图、渐变保持原色，浅彩色实色区域会变暗；极少数复杂混合、图案字体仍可能需要按「查看原色」对照。
+- 磨砂效果用于工具栏和界面表面，不会模糊 PDF 正文或图片。纸张模式有实际背景纹理。
+- 需要登录、依赖来源页 Referer、POST 请求生成、`blob:`、站点自有 Canvas 阅读器或第三方嵌入平台中的 PDF 不保证自动接管。可下载后在墨阅打开；本扩展不会把 POST 请求改成 GET。
+- 明确以 `Content-Disposition: attachment` 下载的在线文件仍保持下载行为。
+- 浏览器设置页、扩展商店和其他扩展页面不能被普通内容脚本改色。网页阴影 DOM 与站点自身强制样式也可能影响效果。
+- 当前版本面向 Chromium 128+，未适配 Safari / Firefox，未发布到扩展商店。
+
+## 验证状态
+
+已通过逻辑测试与真实 PDF.js + 原生 Canvas 渲染测试。测试文件包含文字、默认黑字、灰底、彩色图片、旋转裁剪图片、透明度蒙版和彩色矢量图。三种材质下测试图片区域像素完全一致，纸纹不会覆盖图片，整页扫描图片也保持原色。运行 `npm run test:render` 会在本地 `artifacts/render` 生成对比图与 `report.json`，这些文件不上传到仓库。
+
+0.1.1 修复浅彩色表格底纹过亮，以及缺少键盘配合滚轮缩放的问题。使用本机 GR00T2.pdf 第 7 页验证：Table 1 浅绿色底纹由 RGB(237,245,220) 转成暗绿，Figure 3 两条图片区域的像素差为 0。事件逻辑测试覆盖 Ctrl／⌘ + 滚轮、捏合事件、缩放范围与位置补偿；完整浏览器交互仍待实测。
+
+**完整浏览器自动化验证尚未完成**。逻辑测试与原生 Canvas 渲染测试不能代替自动接管、扩展 CSP 与网页适配的浏览器验证。已提供下述浏览器测试脚本，运行会输出独立的结果和截图。
+
+手动验收建议：
+
+1. 打开普通浅色网页，切换三种材质，确认图片保留原色，暂停网站后恢复。
+2. 打开一个在线 PDF（也可以是无 `.pdf` 后缀的接口），确认自动进入墨阅。
+3. 运行 `node tests/fixture.mjs` 生成本地 `artifacts/test-document.pdf`，拖入阅读器；第一页检查图片颜色，第二页应保持原始扫描图，第三页应出现浅色文字。
+4. 开启文件网址权限后，在浏览器直接打开这个本地 PDF，检查自动接管。
+5. 在阅读器尝试翻页、文字选择、缩放、原色对照、全局关闭与重新打开。
+
+## 开发
+
+需要 Node.js 22.13+（或 24+）。安装和构建：
+
+```sh
+npm install
+npm run build
+npm test
+npm run test:render
+```
+
+浏览器自动化验证（在允许启动浏览器的本地终端运行）：
+
+```sh
+npm run test:browser
+# 自定义 Chromium 路径，或以可见窗口运行
+BROWSER_PATH="/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" HEADED=1 npm run test:browser
+```
+
+默认使用 macOS 的 Microsoft Edge，以及独立的临时测试配置，不操作日常浏览器配置。Chrome 正式版可能禁用命令行加载扩展，可改用 Edge 或 Chrome for Testing。浏览器截图与测试结果输出到 `artifacts/browser`。自动化会验证本地文件选择；`file://` 自动接管需要用户授予的文件网址权限，仍需手动验收。
+
+源码在 `src`，构建输出在 `extension`。`scripts/build.mjs` 从固定版本 PDF.js / Dark Reader 复制本地资源，并应用带匹配数量检查的 PDF.js 颜色补丁。补丁说明与许可证参见 [`THIRD_PARTY.md`](./THIRD_PARTY.md)。更新依赖后必须重新执行渲染检查。
+
+`extension` 中的运行时依赖随扩展提交，便于直接加载和离线使用；`node_modules`、本地测试 PDF、截图、报告和生成的 ZIP 均不提交。构建或测试后如修改了生成文件，请同步提交 `src` 与对应的 `extension` 变更。
+
+## 权限与隐私
+
+网页访问权限用于读取样式并修改页面颜色，网络规则权限用于把 PDF 导向内置阅读器，存储权限用于保存偏好。没有统计、账号、后台上传或远程执行代码。在线 PDF 直接从原地址请求；跨域样式需要时由扩展读取。选择的本地文件在本机解析。
+
+实现参考：[PDF.js](https://github.com/mozilla/pdf.js)、[Chrome declarativeNetRequest API](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest)、[Dark Reader API](https://github.com/darkreader/darkreader#using-dark-reader-for-a-website)。

@@ -1,0 +1,3 @@
+extension/** linguist-generated=true
+extension/vendor/** linguist-vendored=true -whitespace
+extension/licenses/** -whitespace
