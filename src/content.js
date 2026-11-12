@@ -46,11 +46,12 @@
     document.body?.classList.remove("ink-paper-surface");
     if (state.enabled && state.webEnabled && !isExcluded(location.href, state)) {
       const theme = THEMES[state.material];
-      if (isFeishuDrive(location.href)) {
+      const nativeMode = feishuPageMode(location.href);
+      if (nativeMode) {
         // Feishu has a complete native dark palette. Running a second engine
         // over it can recolor text while missing dynamic background tokens.
         DarkReader.disable();
-        feishuTheme.enable(theme);
+        feishuTheme.enable(theme, { materialize: nativeMode === "drive" });
       } else {
         feishuTheme.disable();
         DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
@@ -74,10 +75,19 @@
   let pending = Promise.resolve();
   const refresh = () => { pending = pending.catch(() => {}).then(apply); pending.catch(console.error); };
   chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.settings) refresh(); });
+  let previousPath = location.pathname;
+  const pageChanged = () => {
+    if (location.pathname !== previousPath) {
+      previousPath = location.pathname;
+      refresh();
+    }
+    updateEmbeds();
+  };
+  window.addEventListener("popstate", pageChanged);
   refresh();
   document.addEventListener("DOMContentLoaded", () => {
     refresh();
-    observer = new MutationObserver(updateEmbeds);
+    observer = new MutationObserver(pageChanged);
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }, { once: true });
 })();

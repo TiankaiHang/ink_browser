@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "墨阅 · Ink",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "网页与 PDF 深色阅读，纯黑、磨砂、纸张三种材质，保留图片原色。",
   "minimum_chrome_version": "128",
   "permissions": ["storage", "declarativeNetRequestWithHostAccess"],

@@ -1,8 +1,23 @@
-export function isFeishuDrive(url) {
+export function feishuPageMode(url) {
   try {
     const value = new URL(url);
-    return value.protocol === "https:" && (value.hostname === "feishu.cn" || value.hostname.endsWith(".feishu.cn")) && /^\/drive(?:\/|$)/.test(value.pathname);
-  } catch { return false; }
+    if (value.protocol !== "https:" || !(value.hostname === "feishu.cn" || value.hostname.endsWith(".feishu.cn"))) return null;
+    if (/^\/drive(?:\/|$)/.test(value.pathname)) return "drive";
+    if (/^\/(?:wiki|sheets|docx|docs|base|slides|mindnotes|file)(?:\/|$)/.test(value.pathname)) return "document";
+    return null;
+  } catch { return null; }
+}
+export function isFeishuDrive(url) { return feishuPageMode(url) === "drive"; }
+
+export function feishuDocumentCSS() {
+  // Sheets bootstraps with an SVG snapshot before its native renderer starts.
+  // Snapshot glyph colors are authored fills; changing only its backdrop makes
+  // black glyphs unreadable. Keep this snapshot intact, then let Feishu redraw
+  // the live sheet using its own coordinated UI/content theme settings.
+  return `html[data-ink-material] #ssr-svg {
+    background-color: #ffffff !important;
+    color-scheme: light;
+  }`;
 }
 
 function mixColor(background, foreground, amount) {
@@ -52,7 +67,7 @@ export function createFeishuNativeTheme(document) {
     }
   }
   return {
-    enable(theme) {
+    enable(theme, { materialize = true } = {}) {
       const root = document.documentElement;
       if (!active) {
         previousTheme = root.getAttribute("data-theme");
@@ -66,7 +81,9 @@ export function createFeishuNativeTheme(document) {
         style.dataset.inkSiteTheme = "feishu";
         (document.head || root).append(style);
       }
-      style.textContent = feishuMaterialCSS(theme);
+      // Spreadsheet cells, charts, and document canvases have their own theme
+      // state. Never force UI background tokens into those render surfaces.
+      style.textContent = materialize ? feishuMaterialCSS(theme) : feishuDocumentCSS();
       ensureDark();
     },
     disable() {

@@ -120,12 +120,31 @@ try {
   }
   assert.equal(await feishu.locator("style.darkreader").count(),0,"native Drive theme bypasses the second color engine");
   await feishu.screenshot({path:"artifacts/browser/feishu-native-fixture.png"});
+  const sheetFixture=await readFile("tests/fixtures/feishu-sheet.html","utf8");
+  await context.route("https://ink-fixture.feishu.cn/wiki/**",route=>route.fulfill({status:200,contentType:"text/html",headers:{"Content-Security-Policy":"default-src 'self'; script-src 'nonce-ink-fixture'; style-src 'unsafe-inline'"},body:sheetFixture}));
+  const sheet=await context.newPage();
+  await sheet.goto("https://ink-fixture.feishu.cn/wiki/test-sheet");
+  await sheet.waitForFunction(()=>document.documentElement.dataset.inkMaterial && document.body.dataset.nativeUiTheme==="dark");
+  assert.equal(await sheet.locator("style.darkreader").count(),0);
+  assert.equal(await sheet.locator("#ssr-svg").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
+  assert.equal(await sheet.locator("#ssr-svg text").first().evaluate(node=>getComputedStyle(node).fill),"rgb(0, 0, 0)");
+  assert.equal(await sheet.locator(".sheet-surface").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
+  const snapshotBefore=await sheet.locator("#ssr-svg").screenshot();
+  const canvasBefore=await sheet.locator("#sheet-canvas").screenshot();
+  await sheet.evaluate(()=>{history.pushState({},"","/drive/home/");document.body.append(document.createElement("span"));});
+  await sheet.waitForFunction(()=>document.querySelector('style[data-ink-site-theme]')?.textContent.includes("--bg-body:"));
+  await sheet.evaluate(()=>{history.pushState({},"","/wiki/test-sheet");document.body.append(document.createElement("span"));});
+  await sheet.waitForFunction(()=>!document.querySelector('style[data-ink-site-theme]')?.textContent.includes("--bg-body:"));
+  await sheet.screenshot({path:"artifacts/browser/feishu-sheet-fixture.png"});
   await worker.evaluate(async()=>{const {settings}=await chrome.storage.local.get("settings");await chrome.storage.local.set({settings:{...settings,enabled:false}});});
   await article.waitForFunction(()=>!document.documentElement.dataset.inkMaterial);
   assert.deepEqual(await article.locator("#photo").screenshot(),imageBefore,"web image appearance unchanged");
   await article.waitForFunction(()=>getComputedStyle(document.body).backgroundColor==="rgb(255, 255, 255)");
   await feishu.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="light");
   assert.equal(await feishu.locator(".action-card").first().evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
+  await sheet.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="light");
+  assert.deepEqual(await sheet.locator("#ssr-svg").screenshot(),snapshotBefore,"snapshot remains readable with identical authored colors");
+  assert.deepEqual(await sheet.locator("#sheet-canvas").screenshot(),canvasBefore,"native spreadsheet canvas pixels remain unchanged");
   // Wait for asynchronous rule synchronization rather than assuming storage and
   // DNR update in the same tick.
   await waitForRules(worker,rules=>rules.length===0);

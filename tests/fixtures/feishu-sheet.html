@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light"><head><meta charset="utf-8"><title>Wiki spreadsheet compatibility fixture</title>
+<style>
+html .ccm-scope { --bg-body:#fff; --text-title:#1f2329; --sheet-content-bg:#fff; color-scheme:light; }
+html[data-theme=dark] .ccm-scope { --bg-body:#1a1a1a; --text-title:#ebebeb; color-scheme:dark; }
+body { margin:0; font:16px system-ui; }
+main { padding:24px; background:var(--bg-body); color:var(--text-title); }
+#ssr-svg { width:460px; background:var(--bg-body); }
+#ssr-svg svg { display:block; }
+.sheet-surface { width:460px; background:var(--sheet-content-bg); }
+canvas { display:block; }
+</style></head><body class="ccm-scope"><main><h1>测试工作表</h1><p>工具栏跟随原生主题，工作表保留自己的内容主题。</p>
+<section id="ssr-svg"><svg width="460" height="160" xmlns="http://www.w3.org/2000/svg"><text x="16" y="35" fill="#000">Source / Dataset</text><text x="16" y="70" fill="#000">Readable black text</text><rect x="230" y="18" width="95" height="25" fill="#d0f0d0"/><text x="240" y="35" fill="#000">Completed</text><rect x="16" y="95" width="300" height="16" fill="#000"/><text x="330" y="109" fill="#000">100%</text></svg></section>
+<section class="sheet-surface"><canvas id="sheet-canvas" width="460" height="120"></canvas></section>
+</main><script nonce="ink-fixture">
+const ctx=document.getElementById('sheet-canvas').getContext('2d');ctx.fillStyle='#000';ctx.font='18px sans-serif';ctx.fillText('Native sheet content remains readable',16,36);ctx.fillRect(16,60,300,16);ctx.fillStyle='#d0f0d0';ctx.fillRect(330,60,90,30);
+new MutationObserver(()=>{document.body.dataset.nativeUiTheme=document.documentElement.dataset.theme;}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});document.body.dataset.nativeUiTheme=document.documentElement.dataset.theme;
+</script></body></html>

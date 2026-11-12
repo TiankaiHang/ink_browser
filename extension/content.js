@@ -52,11 +52,26 @@ function applyMaterial(settings) {
   document.documentElement.style.setProperty("--surface", theme.surface);
 }
 
-function isFeishuDrive(url) {
+function feishuPageMode(url) {
   try {
     const value = new URL(url);
-    return value.protocol === "https:" && (value.hostname === "feishu.cn" || value.hostname.endsWith(".feishu.cn")) && /^\/drive(?:\/|$)/.test(value.pathname);
-  } catch { return false; }
+    if (value.protocol !== "https:" || !(value.hostname === "feishu.cn" || value.hostname.endsWith(".feishu.cn"))) return null;
+    if (/^\/drive(?:\/|$)/.test(value.pathname)) return "drive";
+    if (/^\/(?:wiki|sheets|docx|docs|base|slides|mindnotes|file)(?:\/|$)/.test(value.pathname)) return "document";
+    return null;
+  } catch { return null; }
+}
+function isFeishuDrive(url) { return feishuPageMode(url) === "drive"; }
+
+function feishuDocumentCSS() {
+  // Sheets bootstraps with an SVG snapshot before its native renderer starts.
+  // Snapshot glyph colors are authored fills; changing only its backdrop makes
+  // black glyphs unreadable. Keep this snapshot intact, then let Feishu redraw
+  // the live sheet using its own coordinated UI/content theme settings.
+  return `html[data-ink-material] #ssr-svg {
+    background-color: #ffffff !important;
+    color-scheme: light;
+  }`;
 }
 
 function mixColor(background, foreground, amount) {
@@ -106,7 +121,7 @@ function createFeishuNativeTheme(document) {
     }
   }
   return {
-    enable(theme) {
+    enable(theme, { materialize = true } = {}) {
       const root = document.documentElement;
       if (!active) {
         previousTheme = root.getAttribute("data-theme");
@@ -120,7 +135,9 @@ function createFeishuNativeTheme(document) {
         style.dataset.inkSiteTheme = "feishu";
         (document.head || root).append(style);
       }
-      style.textContent = feishuMaterialCSS(theme);
+      // Spreadsheet cells, charts, and document canvases have their own theme
+      // state. Never force UI background tokens into those render surfaces.
+      style.textContent = materialize ? feishuMaterialCSS(theme) : feishuDocumentCSS();
       ensureDark();
     },
     disable() {
@@ -184,11 +201,12 @@ function createFeishuNativeTheme(document) {
     document.body?.classList.remove("ink-paper-surface");
     if (state.enabled && state.webEnabled && !isExcluded(location.href, state)) {
       const theme = THEMES[state.material];
-      if (isFeishuDrive(location.href)) {
+      const nativeMode = feishuPageMode(location.href);
+      if (nativeMode) {
         // Feishu has a complete native dark palette. Running a second engine
         // over it can recolor text while missing dynamic background tokens.
         DarkReader.disable();
-        feishuTheme.enable(theme);
+        feishuTheme.enable(theme, { materialize: nativeMode === "drive" });
       } else {
         feishuTheme.disable();
         DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
@@ -212,10 +230,19 @@ function createFeishuNativeTheme(document) {
   let pending = Promise.resolve();
   const refresh = () => { pending = pending.catch(() => {}).then(apply); pending.catch(console.error); };
   chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.settings) refresh(); });
+  let previousPath = location.pathname;
+  const pageChanged = () => {
+    if (location.pathname !== previousPath) {
+      previousPath = location.pathname;
+      refresh();
+    }
+    updateEmbeds();
+  };
+  window.addEventListener("popstate", pageChanged);
   refresh();
   document.addEventListener("DOMContentLoaded", () => {
     refresh();
-    observer = new MutationObserver(updateEmbeds);
+    observer = new MutationObserver(pageChanged);
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }, { once: true });
 })();

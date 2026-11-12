@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isFeishuDrive, createFeishuNativeTheme, feishuMaterialCSS } from "../src/site-theme.js";
+import { isFeishuDrive, feishuPageMode, createFeishuNativeTheme, feishuMaterialCSS, feishuDocumentCSS } from "../src/site-theme.js";
 import { THEMES } from "../src/settings.js";
 
 function documentFixture(theme) {
@@ -33,6 +33,13 @@ test("native theme routing is limited to Feishu Drive", () => {
   assert.equal(isFeishuDrive("https://tenant.feishu.cn/drive/home/"), true);
   assert.equal(isFeishuDrive("https://tenant.feishu.cn/drive/folder/abc"), true);
   for (const url of ["https://accounts.feishu.cn/login", "https://tenant.feishu.cn/docx/abc", "https://feishu.cn.evil.test/drive/home/", "http://tenant.feishu.cn/drive/home/", "not-a-url"]) assert.equal(isFeishuDrive(url), false);
+});
+test("Wiki spreadsheets and standalone editors use the document-safe native mode", () => {
+  assert.equal(feishuPageMode("https://tenant.feishu.cn/drive/home/"), "drive");
+  for (const path of ["/wiki/test", "/sheets/test", "/docx/test", "/docs/test", "/base/test", "/slides/test", "/mindnotes/test", "/file/test"]) {
+    assert.equal(feishuPageMode(`https://tenant.feishu.cn${path}`), "document");
+  }
+  for (const url of ["https://accounts.feishu.cn/login", "https://feishu.cn.evil.test/wiki/test", "http://tenant.feishu.cn/sheets/test", "not-a-url"]) assert.equal(feishuPageMode(url), null);
 });
 test("each material pairs dark surfaces with light text on the native token scope", () => {
   for (const theme of Object.values(THEMES)) {
@@ -69,4 +76,20 @@ test("late app theme updates stay dark and retain the new site preference", () =
   assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "light");
   fixture.changeTheme(null);
   assert.equal(fixture.document.documentElement.getAttribute("data-theme"), null);
+});
+test("document mode does not force dark UI tokens into a light spreadsheet canvas", () => {
+  const fixture = documentFixture("light");
+  const adapter = createFeishuNativeTheme(fixture.document);
+  adapter.enable(THEMES.paper, { materialize: false });
+  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "dark");
+  assert.equal(fixture.styles[0].textContent, feishuDocumentCSS());
+  for (const property of ["--bg-body", "--text-title", "--bg-content-base", "filter:"]) assert.ok(!fixture.styles[0].textContent.includes(property));
+  assert.ok(fixture.styles[0].textContent.includes("#ssr-svg"));
+  assert.ok(fixture.styles[0].textContent.includes("#ffffff"));
+  adapter.enable(THEMES.black, { materialize: true });
+  assert.ok(fixture.styles[0].textContent.includes("--bg-body: #000000"));
+  adapter.enable(THEMES.black, { materialize: false });
+  assert.ok(!fixture.styles[0].textContent.includes("--bg-body"));
+  adapter.disable();
+  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "light");
 });
