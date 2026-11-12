@@ -75,7 +75,7 @@ test("built extension references local assets and keeps a strict MV3 CSP", async
   assert.equal(manifest.manifest_version, 3);
   assert.ok(!manifest.content_security_policy.extension_pages.includes("'unsafe-eval'"));
   assert.ok(!manifest.permissions.includes("tabs"));
-  for (const path of [manifest.background.service_worker, manifest.action.default_popup, ...manifest.content_scripts[0].js, ...Object.values(manifest.icons)]) assert.ok((await readFile(`extension/${path}`)).length > 0);
+  for (const path of [manifest.background.service_worker, manifest.action.default_popup, ...manifest.content_scripts.flatMap(script => script.js), ...Object.values(manifest.icons)]) assert.ok((await readFile(`extension/${path}`)).length > 0);
   const renderer = await readFile("extension/vendor/pdf.mjs", "utf8");
   assert.ok(renderer.includes("mapPdfColor(transferred, this.pageColors, this.smaskStack.length)"));
   assert.ok(renderer.includes("this.pageColors && !this.pageColors.ink"));

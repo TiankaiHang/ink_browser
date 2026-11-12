@@ -30,6 +30,9 @@ for (const directory of ["cmaps", "standard_fonts", "wasm", "iccs"]) await cp(pa
 await cp(path.join(root, "node_modules/darkreader/darkreader.js"), path.join(out, "vendor/darkreader.js"));
 const shared = (await Promise.all(["settings.js", "site-theme.js"].map(name => readFile(path.join(root, "src", name), "utf8")))).map(source => source.replaceAll(/^export /gm, "")).join("\n");
 await writeFile(path.join(out, "content.js"), `{\n${shared}\n${await readFile(path.join(root, "src/content.js"), "utf8")}\n}\n`);
+const controller = (await readFile(path.join(root, "src/feishu-native-controller.js"), "utf8")).replaceAll(/^export /gm, "");
+const policy = (await readFile(path.join(root, "src/site-theme.js"), "utf8")).replaceAll(/^export /gm, "");
+await writeFile(path.join(out, "feishu-native-main.js"), `(() => {\n"use strict";\n${policy}\n${controller}\n${await readFile(path.join(root, "src/feishu-native-main.js"), "utf8")}\n})();\n`);
 await mkdir(path.join(out, "licenses"), { recursive: true });
 await cp(path.join(pdfRoot, "LICENSE"), path.join(out, "licenses/PDFJS-LICENSE"));
 await cp(path.join(root, "node_modules/darkreader/LICENSE"), path.join(out, "licenses/DARKREADER-LICENSE"));

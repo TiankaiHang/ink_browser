@@ -110,12 +110,12 @@ try {
   await context.route("https://ink-fixture.feishu.cn/drive/**",route=>route.fulfill({status:200,contentType:"text/html",headers:{"Content-Security-Policy":"default-src 'self'; script-src 'nonce-ink-fixture'; style-src 'unsafe-inline'; img-src data:"},body:fixture}));
   const feishu=await context.newPage();
   await feishu.goto("https://ink-fixture.feishu.cn/drive/home/");
-  await feishu.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="dark" && document.body.dataset.lateTheme==="loaded");
-  for(const [material,background,surface] of [["black","rgb(0, 0, 0)","rgb(17, 17, 17)"],["paper","rgb(32, 33, 30)","rgb(42, 43, 38)"],["frost","rgb(24, 30, 35)","rgb(34, 42, 49)"]]) {
+  await feishu.waitForFunction(()=>document.documentElement.dataset.inkFeishuNativeStatus==="applied" && document.body.dataset.lateTheme==="loaded");
+  for(const material of ["black","paper","frost"]) {
     await worker.evaluate(async material=>{const {settings}=await chrome.storage.local.get("settings");await chrome.storage.local.set({settings:{...settings,material}});},material);
-    await feishu.waitForFunction(material=>document.documentElement.dataset.inkMaterial===material,material);
-    assert.equal(await feishu.locator("#mainBox").evaluate(node=>getComputedStyle(node).backgroundColor),background);
-    assert.equal(await feishu.locator(".action-card").first().evaluate(node=>getComputedStyle(node).backgroundColor),surface);
+    assert.equal(await feishu.locator("html").getAttribute("data-ink-material"),null,"no material override on Feishu");
+    assert.equal(await feishu.locator("#mainBox").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(26, 26, 26)");
+    assert.equal(await feishu.locator(".action-card").first().evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(41, 41, 41)");
     assert.equal(await feishu.locator(".preview").evaluate(node=>getComputedStyle(node).filter),"brightness(0.8)");
   }
   assert.equal(await feishu.locator("style.darkreader").count(),0,"native Drive theme bypasses the second color engine");
@@ -123,18 +123,18 @@ try {
   const sheetFixture=await readFile("tests/fixtures/feishu-sheet.html","utf8");
   await context.route("https://ink-fixture.feishu.cn/wiki/**",route=>route.fulfill({status:200,contentType:"text/html",headers:{"Content-Security-Policy":"default-src 'self'; script-src 'nonce-ink-fixture'; style-src 'unsafe-inline'"},body:sheetFixture}));
   const sheet=await context.newPage();
-  await sheet.goto("https://ink-fixture.feishu.cn/wiki/test-sheet");
-  await sheet.waitForFunction(()=>document.documentElement.dataset.inkMaterial && document.body.dataset.nativeUiTheme==="dark");
+  await sheet.goto("https://ink-fixture.feishu.cn/wiki/test-sheet?contentTheme=light");
+  await sheet.waitForFunction(()=>document.documentElement.dataset.inkFeishuNativeStatus==="applied" && document.body.dataset.nativeUiTheme==="dark" && document.body.dataset.contentTheme==="dark");
   assert.equal(await sheet.locator("style.darkreader").count(),0);
-  assert.equal(await sheet.locator("#ssr-svg").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
-  assert.equal(await sheet.locator("#ssr-svg text").first().evaluate(node=>getComputedStyle(node).fill),"rgb(0, 0, 0)");
-  assert.equal(await sheet.locator(".sheet-surface").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
-  const snapshotBefore=await sheet.locator("#ssr-svg").screenshot();
-  const canvasBefore=await sheet.locator("#sheet-canvas").screenshot();
+  assert.equal(await sheet.locator("#ssr-svg").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(26, 26, 26)");
+  assert.equal(await sheet.locator("#ssr-svg text").first().evaluate(node=>getComputedStyle(node).fill),"rgb(235, 235, 235)");
+  assert.equal(await sheet.locator(".sheet-surface").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(26, 26, 26)");
+  const statusPixels=await sheet.locator("#sheet-canvas").evaluate(node=>[...node.getContext('2d').getImageData(350,75,1,1).data]);
   await sheet.evaluate(()=>{history.pushState({},"","/drive/home/");document.body.append(document.createElement("span"));});
-  await sheet.waitForFunction(()=>document.querySelector('style[data-ink-site-theme]')?.textContent.includes("--bg-body:"));
+  await sheet.waitForFunction(()=>document.documentElement.dataset.inkMode==="feishu-native");
   await sheet.evaluate(()=>{history.pushState({},"","/wiki/test-sheet");document.body.append(document.createElement("span"));});
-  await sheet.waitForFunction(()=>!document.querySelector('style[data-ink-site-theme]')?.textContent.includes("--bg-body:"));
+  await sheet.waitForFunction(()=>document.documentElement.dataset.inkMode==="feishu-native");
+  assert.equal(await sheet.locator('style[data-ink-site-theme]').count(),0);
   await sheet.screenshot({path:"artifacts/browser/feishu-sheet-fixture.png"});
   await worker.evaluate(async()=>{const {settings}=await chrome.storage.local.get("settings");await chrome.storage.local.set({settings:{...settings,enabled:false}});});
   await article.waitForFunction(()=>!document.documentElement.dataset.inkMaterial);
@@ -143,8 +143,9 @@ try {
   await feishu.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="light");
   assert.equal(await feishu.locator(".action-card").first().evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
   await sheet.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="light");
-  assert.deepEqual(await sheet.locator("#ssr-svg").screenshot(),snapshotBefore,"snapshot remains readable with identical authored colors");
-  assert.deepEqual(await sheet.locator("#sheet-canvas").screenshot(),canvasBefore,"native spreadsheet canvas pixels remain unchanged");
+  assert.equal(await sheet.locator("#ssr-svg text").first().evaluate(node=>getComputedStyle(node).fill),"rgb(0, 0, 0)");
+  assert.equal(await sheet.locator(".sheet-surface").evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
+  assert.deepEqual(await sheet.locator("#sheet-canvas").evaluate(node=>[...node.getContext('2d').getImageData(350,75,1,1).data]),statusPixels,"native status colors remain unchanged");
   // Wait for asynchronous rule synchronization rather than assuming storage and
   // DNR update in the same tick.
   await waitForRules(worker,rules=>rules.length===0);

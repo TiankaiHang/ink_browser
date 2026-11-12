@@ -1,4 +1,5 @@
 import { readSettings, saveSettings, siteKey, applyMaterial, THEMES } from "./settings.js";
+import { feishuPageMode } from "./site-theme.js";
 let settings = await readSettings();
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 const host = siteKey(tab?.url);
@@ -12,6 +13,7 @@ function paint() {
   siteButton.disabled = !host;
   siteButton.textContent = settings.excludedHosts.includes(host) ? "恢复此网站" : "暂停此网站";
   document.getElementById("site").textContent = host || "阅读器与浏览器页面";
+  document.getElementById("native-site-note").hidden = !feishuPageMode(tab?.url);
 }
 let busy = Promise.resolve();
 function change(patch) {

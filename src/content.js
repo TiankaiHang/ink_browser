@@ -43,25 +43,25 @@
     if (!document.documentElement) return;
     style?.remove();
     document.documentElement.removeAttribute("data-ink-material");
+    document.documentElement.removeAttribute("data-ink-mode");
     document.body?.classList.remove("ink-paper-surface");
     if (state.enabled && state.webEnabled && !isExcluded(location.href, state)) {
       const theme = THEMES[state.material];
       const nativeMode = feishuPageMode(location.href);
       if (nativeMode) {
-        // Feishu has a complete native dark palette. Running a second engine
-        // over it can recolor text while missing dynamic background tokens.
         DarkReader.disable();
-        feishuTheme.enable(theme, { materialize: nativeMode === "drive" });
+        feishuTheme.enable();
+        document.documentElement.dataset.inkMode = "feishu-native";
       } else {
         feishuTheme.disable();
         DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
-      }
-      document.documentElement.dataset.inkMaterial = state.material;
-      if (document.body && getComputedStyle(document.body).backgroundImage === "none") document.body.classList.add("ink-paper-surface");
-      style = document.createElement("style");
-      style.textContent = `html[data-ink-material="paper"] body.ink-paper-surface { background-image: url("${texture}") !important; background-repeat: repeat !important; background-size: 180px 180px !important; }
+        document.documentElement.dataset.inkMaterial = state.material;
+        if (document.body && getComputedStyle(document.body).backgroundImage === "none") document.body.classList.add("ink-paper-surface");
+        style = document.createElement("style");
+        style.textContent = `html[data-ink-material="paper"] body.ink-paper-surface { background-image: url("${texture}") !important; background-repeat: repeat !important; background-size: 180px 180px !important; }
         html[data-ink-material="frost"] body.ink-paper-surface { background-image: radial-gradient(ellipse at 10% 0%, rgba(130,155,180,.07), transparent 65%) !important; }`;
-      (document.head || document.documentElement).append(style);
+        (document.head || document.documentElement).append(style);
+      }
     } else {
       feishuTheme.disable();
       DarkReader.disable();

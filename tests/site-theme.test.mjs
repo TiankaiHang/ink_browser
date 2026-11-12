@@ -1,95 +1,92 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isFeishuDrive, feishuPageMode, createFeishuNativeTheme, feishuMaterialCSS, feishuDocumentCSS } from "../src/site-theme.js";
-import { THEMES } from "../src/settings.js";
+import { feishuPageMode, createFeishuNativeTheme, FEISHU_NATIVE_EVENT } from "../src/site-theme.js";
+import { createNativeThemeController } from "../src/feishu-native-controller.js";
 
-function documentFixture(theme) {
-  const attributes = new Map(theme === null ? [] : [["data-theme", theme]]);
-  const styles = [];
-  let callback;
-  let observing = false;
-  const root = {
-    getAttribute: name => attributes.get(name) ?? null,
-    setAttribute: (name, value) => attributes.set(name, value),
-    removeAttribute: name => attributes.delete(name)
-  };
+function fixture() {
+  const attributes = new Map([["data-theme", "light"]]);
+  const events = new EventTarget();
   const document = {
-    documentElement: root,
-    defaultView: { MutationObserver: class {
-      constructor(fn) { callback = fn; }
-      observe() { observing = true; }
-      disconnect() { observing = false; }
-    } },
-    head: { append(style) { styles.push(style); style.isConnected = true; } },
-    createElement() { return { dataset: {}, isConnected: false, textContent: "", remove() { this.isConnected = false; } }; }
+    documentElement: {
+      getAttribute: name => attributes.get(name) ?? null,
+      setAttribute: (name, value) => attributes.set(name, value),
+      removeAttribute: name => attributes.delete(name)
+    },
+    defaultView: { CustomEvent },
+    dispatchEvent: events.dispatchEvent.bind(events)
   };
-  return { document, styles, changeTheme(value) {
-    if (value === null) root.removeAttribute("data-theme"); else root.setAttribute("data-theme", value);
-    if (observing) callback();
-  } };
+  const calls = [];
+  const timers = new Map();
+  let nextId = 0;
+  const window = { location: { href: "https://tenant.feishu.cn/wiki/test?contentTheme=light" }, matchMedia: () => ({ matches: false }) };
+  const controller = createNativeThemeController({ window, document, schedule: fn => { timers.set(++nextId, fn); return nextId; }, cancel: id => timers.delete(id), maxAttempts: 3 });
+  return { attributes, calls, timers, document, window, controller, events,
+    installAPI() {
+      window.switchUIState = value => calls.push(["ui", value]);
+      window.switchContentUIState = value => calls.push(["content", value]);
+    },
+    tick() { const entry = timers.entries().next().value; if (entry) { timers.delete(entry[0]); entry[1](); } }
+  };
 }
 
-test("native theme routing is limited to Feishu Drive", () => {
-  assert.equal(isFeishuDrive("https://tenant.feishu.cn/drive/home/"), true);
-  assert.equal(isFeishuDrive("https://tenant.feishu.cn/drive/folder/abc"), true);
-  for (const url of ["https://accounts.feishu.cn/login", "https://tenant.feishu.cn/docx/abc", "https://feishu.cn.evil.test/drive/home/", "http://tenant.feishu.cn/drive/home/", "not-a-url"]) assert.equal(isFeishuDrive(url), false);
-});
-test("Wiki spreadsheets and standalone editors use the document-safe native mode", () => {
+test("Feishu Drive, Wiki, and editors share native-only routing", () => {
   assert.equal(feishuPageMode("https://tenant.feishu.cn/drive/home/"), "drive");
-  for (const path of ["/wiki/test", "/sheets/test", "/docx/test", "/docs/test", "/base/test", "/slides/test", "/mindnotes/test", "/file/test"]) {
-    assert.equal(feishuPageMode(`https://tenant.feishu.cn${path}`), "document");
-  }
+  for (const path of ["/wiki/test", "/sheets/test", "/docx/test", "/docs/test", "/base/test", "/slides/test", "/mindnotes/test", "/file/test"]) assert.equal(feishuPageMode(`https://tenant.feishu.cn${path}`), "document");
   for (const url of ["https://accounts.feishu.cn/login", "https://feishu.cn.evil.test/wiki/test", "http://tenant.feishu.cn/sheets/test", "not-a-url"]) assert.equal(feishuPageMode(url), null);
 });
-test("each material pairs dark surfaces with light text on the native token scope", () => {
-  for (const theme of Object.values(THEMES)) {
-    const css = feishuMaterialCSS(theme);
-    assert.ok(css.includes("html[data-ink-material] .ccm-scope"));
-    assert.ok(css.includes(`--bg-body: ${theme.background} !important`));
-    assert.ok(css.includes(`--bg-float: ${theme.surface} !important`));
-    assert.ok(css.includes(`--text-title: ${theme.foreground} !important`));
-    assert.ok(!css.includes("filter:") && !css.includes("background-image:"), "does not filter thumbnails or replace their images");
-  }
-});
-test("native theme restores light, dark, and absent site preferences on disable", () => {
-  for (const before of [null, "light", "dark"]) {
-    const fixture = documentFixture(before);
-    const adapter = createFeishuNativeTheme(fixture.document);
-    adapter.enable(THEMES.paper);
-    assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "dark");
-    adapter.enable(THEMES.frost);
-    assert.equal(fixture.styles.filter(style => style.isConnected).length, 1);
-    assert.ok(fixture.styles[0].textContent.includes(THEMES.frost.background));
-    adapter.disable();
-    adapter.disable();
-    assert.equal(fixture.document.documentElement.getAttribute("data-theme"), before);
-    assert.equal(fixture.styles.filter(style => style.isConnected).length, 0);
-  }
-});
-test("late app theme updates stay dark and retain the new site preference", () => {
-  const fixture = documentFixture("dark");
-  const adapter = createFeishuNativeTheme(fixture.document);
-  adapter.enable(THEMES.paper);
-  fixture.changeTheme("light");
-  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "dark");
+test("the isolated script requests native mode without rewriting the site theme", () => {
+  const f = fixture();
+  const adapter = createFeishuNativeTheme(f.document);
+  let count = 0;
+  f.events.addEventListener(FEISHU_NATIVE_EVENT, () => count++);
+  adapter.enable();
+  assert.equal(f.attributes.get("data-theme"), "light");
+  assert.equal(f.attributes.get("data-ink-feishu-native"), "enabled");
   adapter.disable();
-  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "light");
-  fixture.changeTheme(null);
-  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), null);
-});
-test("document mode does not force dark UI tokens into a light spreadsheet canvas", () => {
-  const fixture = documentFixture("light");
-  const adapter = createFeishuNativeTheme(fixture.document);
-  adapter.enable(THEMES.paper, { materialize: false });
-  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "dark");
-  assert.equal(fixture.styles[0].textContent, feishuDocumentCSS());
-  for (const property of ["--bg-body", "--text-title", "--bg-content-base", "filter:"]) assert.ok(!fixture.styles[0].textContent.includes(property));
-  assert.ok(fixture.styles[0].textContent.includes("#ssr-svg"));
-  assert.ok(fixture.styles[0].textContent.includes("#ffffff"));
-  adapter.enable(THEMES.black, { materialize: true });
-  assert.ok(fixture.styles[0].textContent.includes("--bg-body: #000000"));
-  adapter.enable(THEMES.black, { materialize: false });
-  assert.ok(!fixture.styles[0].textContent.includes("--bg-body"));
   adapter.disable();
-  assert.equal(fixture.document.documentElement.getAttribute("data-theme"), "light");
+  assert.equal(f.attributes.get("data-theme"), "light");
+  assert.equal(f.attributes.has("data-ink-feishu-native"), false);
+  assert.equal(count, 2);
+});
+test("native content and UI callbacks are invoked together and restored together", () => {
+  const f = fixture(); f.installAPI();
+  f.controller.request(true);
+  assert.deepEqual(f.calls, [["content", "dark"], ["ui", { mode: "DARK", vars: {} }]]);
+  assert.equal(f.attributes.get("data-ink-feishu-native-status"), "applied");
+  assert.equal(f.attributes.get("data-theme"), "light", "controller never fakes native mode by setting data-theme");
+  f.controller.request(false);
+  assert.deepEqual(f.calls.slice(2), [["content", "light"], ["ui", { mode: "LIGHT", vars: {} }]]);
+  assert.equal(f.attributes.has("data-ink-feishu-native-status"), false);
+});
+test("wait for both native APIs; never apply UI-only dark mode", () => {
+  const f = fixture();
+  f.window.switchUIState = value => f.calls.push(["ui", value]);
+  f.controller.request(true);
+  assert.equal(f.attributes.get("data-ink-feishu-native-status"), "pending");
+  assert.deepEqual(f.calls, []);
+  f.tick();
+  assert.deepEqual(f.calls, []);
+  f.installAPI(); f.tick();
+  assert.deepEqual(f.calls, [["content", "dark"], ["ui", { mode: "DARK", vars: {} }]]);
+});
+test("missing native APIs leave the page unchanged and eventually stop polling", () => {
+  const f = fixture(); f.controller.request(true); f.tick(); f.tick();
+  assert.equal(f.attributes.get("data-ink-feishu-native-status"), "unavailable");
+  assert.equal(f.attributes.get("data-theme"), "light");
+  assert.equal(f.timers.size, 0);
+  assert.deepEqual(f.calls, []);
+});
+test("disabling during app startup cancels pending theme requests", () => {
+  const f = fixture(); f.controller.request(true); f.controller.request(false);
+  f.installAPI(); f.tick();
+  assert.equal(f.timers.size, 0);
+  assert.deepEqual(f.calls, []);
+});
+test("native callback failure restores both settings without a CSS fallback", () => {
+  const f = fixture(); f.installAPI();
+  f.window.switchUIState = value => { f.calls.push(["ui", value]); if (value.mode === "DARK") throw new Error("unsupported"); };
+  f.controller.request(true);
+  assert.deepEqual(f.calls, [["content", "dark"], ["ui", { mode: "DARK", vars: {} }], ["content", "light"], ["ui", { mode: "LIGHT", vars: {} }]]);
+  assert.equal(f.attributes.get("data-ink-feishu-native-status"), "unavailable");
+  assert.equal(f.attributes.get("data-theme"), "light");
 });
