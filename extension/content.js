@@ -52,7 +52,91 @@ function applyMaterial(settings) {
   document.documentElement.style.setProperty("--surface", theme.surface);
 }
 
-// settings.js is prepended by the build, keeping content scripts in the isolated world.
+function isFeishuDrive(url) {
+  try {
+    const value = new URL(url);
+    return value.protocol === "https:" && (value.hostname === "feishu.cn" || value.hostname.endsWith(".feishu.cn")) && /^\/drive(?:\/|$)/.test(value.pathname);
+  } catch { return false; }
+}
+
+function mixColor(background, foreground, amount) {
+  const channel = (color, index) => parseInt(color.slice(index, index + 2), 16);
+  return "#" + [1, 3, 5].map(index => Math.round(channel(background, index) * (1 - amount) + channel(foreground, index) * amount).toString(16).padStart(2, "0")).join("");
+}
+
+function feishuMaterialCSS(theme) {
+  const muted = mixColor(theme.background, theme.foreground, .7);
+  const faint = mixColor(theme.background, theme.foreground, .48);
+  const border = mixColor(theme.background, theme.foreground, .18);
+  const hover = mixColor(theme.background, theme.foreground, .08);
+  const active = mixColor(theme.background, theme.foreground, .13);
+  // Feishu declares these tokens on .ccm-scope, not :root. Override the same
+  // scope so dynamically inserted theme styles cannot leave white surfaces.
+  const tokens = {
+    "bg-base": theme.background, "bg-body": theme.background,
+    "bg-body-overlay": theme.surface, "bg-content-base": theme.background,
+    "bg-float": theme.surface, "bg-float-base": theme.background,
+    "bg-float-overlay": theme.surface, "bg-sub-navigation": theme.surface,
+    "bg-filler": theme.surface, "bg-tips": theme.surface,
+    "text-title": theme.foreground, "text-caption": muted,
+    "text-placeholder": faint, "text-disabled": faint,
+    "icon-n1": theme.foreground, "icon-n2": muted, "icon-n3": faint,
+    "line-border-card": border, "line-border-component": border,
+    "line-divider-default": border, "line-divider-module": border,
+    "fill-hover": hover, "fill-pressed": active, "fill-active": active
+  };
+  return `html[data-ink-material] .ccm-scope {
+    color-scheme: dark;
+    ${Object.entries(tokens).map(([name, value]) => `--${name}: ${value} !important;`).join("\n    ")}
+  }`;
+}
+
+function createFeishuNativeTheme(document) {
+  let active = false;
+  let previousTheme;
+  let style;
+  let observer;
+  function ensureDark() {
+    const root = document.documentElement;
+    if (active && root.getAttribute("data-theme") !== "dark") {
+      // Preserve an in-page theme change so disabling Ink restores the latest
+      // site preference. No cookie, localStorage, or server setting is changed.
+      previousTheme = root.getAttribute("data-theme");
+      root.setAttribute("data-theme", "dark");
+    }
+  }
+  return {
+    enable(theme) {
+      const root = document.documentElement;
+      if (!active) {
+        previousTheme = root.getAttribute("data-theme");
+        active = true;
+        root.setAttribute("data-theme", "dark");
+        observer = new document.defaultView.MutationObserver(ensureDark);
+        observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+      }
+      if (!style?.isConnected) {
+        style = document.createElement("style");
+        style.dataset.inkSiteTheme = "feishu";
+        (document.head || root).append(style);
+      }
+      style.textContent = feishuMaterialCSS(theme);
+      ensureDark();
+    },
+    disable() {
+      if (!active) return;
+      active = false;
+      observer?.disconnect();
+      observer = null;
+      style?.remove();
+      style = null;
+      if (previousTheme === null) document.documentElement.removeAttribute("data-theme");
+      else document.documentElement.setAttribute("data-theme", previousTheme);
+    }
+  };
+}
+
+// Shared settings and site adapters are prepended in the isolated world.
 (() => {
   if (!globalThis.chrome?.runtime?.id || document.documentElement?.dataset.inkContent) return;
   let style;
@@ -61,6 +145,7 @@ function applyMaterial(settings) {
   const reader = chrome.runtime.getURL("viewer.html");
   const texture = chrome.runtime.getURL("assets/paper.svg");
   const embedded = new Map();
+  const feishuTheme = createFeishuNativeTheme(document);
   DarkReader.setFetchMethod(async url => {
     const result = await chrome.runtime.sendMessage({ type: "FETCH_CSS", url });
     if (result.error) throw new Error(result.error);
@@ -99,15 +184,25 @@ function applyMaterial(settings) {
     document.body?.classList.remove("ink-paper-surface");
     if (state.enabled && state.webEnabled && !isExcluded(location.href, state)) {
       const theme = THEMES[state.material];
-      DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
+      if (isFeishuDrive(location.href)) {
+        // Feishu has a complete native dark palette. Running a second engine
+        // over it can recolor text while missing dynamic background tokens.
+        DarkReader.disable();
+        feishuTheme.enable(theme);
+      } else {
+        feishuTheme.disable();
+        DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
+      }
       document.documentElement.dataset.inkMaterial = state.material;
       if (document.body && getComputedStyle(document.body).backgroundImage === "none") document.body.classList.add("ink-paper-surface");
       style = document.createElement("style");
       style.textContent = `html[data-ink-material="paper"] body.ink-paper-surface { background-image: url("${texture}") !important; background-repeat: repeat !important; background-size: 180px 180px !important; }
-        html[data-ink-material="frost"] body.ink-paper-surface { background-image: radial-gradient(ellipse at 10% 0%, rgba(130,155,180,.07), transparent 65%) !important; }
-        html[data-ink-material] img, html[data-ink-material] video, html[data-ink-material] canvas, html[data-ink-material] picture { filter: none !important; }`;
+        html[data-ink-material="frost"] body.ink-paper-surface { background-image: radial-gradient(ellipse at 10% 0%, rgba(130,155,180,.07), transparent 65%) !important; }`;
       (document.head || document.documentElement).append(style);
-    } else DarkReader.disable();
+    } else {
+      feishuTheme.disable();
+      DarkReader.disable();
+    }
     if (!state.enabled || !state.pdfEnabled || isExcluded(location.href, state)) {
       for (const [frame, node] of embedded) frame.replaceWith(node);
       embedded.clear();

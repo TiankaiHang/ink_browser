@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light"><head><meta charset="utf-8"><title>Drive theme compatibility fixture</title>
+<style>
+html .ccm-scope { --bg-body:#fff; --bg-float:#fff; --text-title:#1f2329; color-scheme:light; }
+html[data-theme=dark] .ccm-scope { --bg-body:#1a1a1a; --bg-float:#292929; --text-title:#ebebeb; color-scheme:dark; }
+body { margin:0; font:16px system-ui; }
+#mainBox { padding:36px; min-height:100vh; background:var(--bg-body); color:var(--text-title); }
+.action-card { display:inline-block; margin-right:12px; padding:24px; border:1px solid var(--line-border-card,#ddd); border-radius:10px; background:var(--bg-float); color:var(--text-title); }
+.preview { display:block; margin-top:24px; filter:brightness(.8); }
+</style></head><body class="ccm-scope"><main id="mainBox"><h1>主页</h1><section><button class="action-card">新建</button><button class="action-card">上传</button><button class="action-card">模板库</button></section>
+<p>阅读测试文档</p><img class="preview" width="120" height="80" alt="原色预览" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='80'%3E%3Cpath fill='%23dc4b32' d='M0 0h40v80H0z'/%3E%3Cpath fill='%23289b5f' d='M40 0h40v80H40z'/%3E%3Cpath fill='%233264dc' d='M80 0h40v80H80z'/%3E%3C/svg%3E"></main>
+<script nonce="ink-fixture">setTimeout(()=>{const style=document.createElement('style');style.textContent='html .ccm-scope { --bg-body:#fff; --bg-float:#fff; --text-title:#1f2329; } html[data-theme=dark] .ccm-scope { --bg-body:#1a1a1a; --bg-float:#292929; --text-title:#ebebeb; }';document.head.append(style);document.body.dataset.lateTheme='loaded';},40);</script>
+</body></html>

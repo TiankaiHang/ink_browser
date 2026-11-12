@@ -1,6 +1,6 @@
 import { chromium } from "playwright-core";
 import { createServer } from "node:http";
-import { mkdir, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -106,16 +106,32 @@ try {
   assert.ok(Math.abs(anchorAfter.y-anchorBefore.y)<.005);
   await local.keyboard.press("Control+0");
   await local.waitForFunction(()=>document.getElementById("zoom").textContent==="适宽");
+  const fixture=await readFile("tests/fixtures/feishu-drive.html","utf8");
+  await context.route("https://ink-fixture.feishu.cn/drive/**",route=>route.fulfill({status:200,contentType:"text/html",headers:{"Content-Security-Policy":"default-src 'self'; script-src 'nonce-ink-fixture'; style-src 'unsafe-inline'; img-src data:"},body:fixture}));
+  const feishu=await context.newPage();
+  await feishu.goto("https://ink-fixture.feishu.cn/drive/home/");
+  await feishu.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="dark" && document.body.dataset.lateTheme==="loaded");
+  for(const [material,background,surface] of [["black","rgb(0, 0, 0)","rgb(17, 17, 17)"],["paper","rgb(32, 33, 30)","rgb(42, 43, 38)"],["frost","rgb(24, 30, 35)","rgb(34, 42, 49)"]]) {
+    await worker.evaluate(async material=>{const {settings}=await chrome.storage.local.get("settings");await chrome.storage.local.set({settings:{...settings,material}});},material);
+    await feishu.waitForFunction(material=>document.documentElement.dataset.inkMaterial===material,material);
+    assert.equal(await feishu.locator("#mainBox").evaluate(node=>getComputedStyle(node).backgroundColor),background);
+    assert.equal(await feishu.locator(".action-card").first().evaluate(node=>getComputedStyle(node).backgroundColor),surface);
+    assert.equal(await feishu.locator(".preview").evaluate(node=>getComputedStyle(node).filter),"brightness(0.8)");
+  }
+  assert.equal(await feishu.locator("style.darkreader").count(),0,"native Drive theme bypasses the second color engine");
+  await feishu.screenshot({path:"artifacts/browser/feishu-native-fixture.png"});
   await worker.evaluate(async()=>{const {settings}=await chrome.storage.local.get("settings");await chrome.storage.local.set({settings:{...settings,enabled:false}});});
   await article.waitForFunction(()=>!document.documentElement.dataset.inkMaterial);
   assert.deepEqual(await article.locator("#photo").screenshot(),imageBefore,"web image appearance unchanged");
   await article.waitForFunction(()=>getComputedStyle(document.body).backgroundColor==="rgb(255, 255, 255)");
+  await feishu.waitForFunction(()=>document.documentElement.getAttribute("data-theme")==="light");
+  assert.equal(await feishu.locator(".action-card").first().evaluate(node=>getComputedStyle(node).backgroundColor),"rgb(255, 255, 255)");
   // Wait for asynchronous rule synchronization rather than assuming storage and
   // DNR update in the same tick.
   await waitForRules(worker,rules=>rules.length===0);
   const fileAccess=await worker.evaluate(()=>chrome.extension.isAllowedFileSchemeAccess());
   assert.deepEqual(errors,[],"no uncaught browser errors");
-  const report={passed:true,webTheme:true,webImagesUnchanged:true,automaticHttpPdf:true,queryPreserved:true,allMaterials:true,localFilePicker:true,automaticFileUrl:fileAccess?"available; manually verify local URL":"requires user to allow file URL access",browserErrors:errors};
+  const report={passed:true,webTheme:true,webImagesUnchanged:true,feishuNativeFixture:true,automaticHttpPdf:true,queryPreserved:true,allMaterials:true,localFilePicker:true,automaticFileUrl:fileAccess?"available; manually verify local URL":"requires user to allow file URL access",browserErrors:errors};
   await writeFile("artifacts/browser/report.json",JSON.stringify(report,null,2)+"\n");
   console.log(report);
 } catch(error) {

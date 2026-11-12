@@ -28,7 +28,7 @@ await cp(path.join(pdfRoot, "web/pdf_viewer.css"), path.join(out, "vendor/pdf_vi
 await cp(path.join(pdfRoot, "web/images"), path.join(out, "vendor/images"), { recursive: true });
 for (const directory of ["cmaps", "standard_fonts", "wasm", "iccs"]) await cp(path.join(pdfRoot, directory), path.join(out, "vendor", directory), { recursive: true });
 await cp(path.join(root, "node_modules/darkreader/darkreader.js"), path.join(out, "vendor/darkreader.js"));
-const shared = (await readFile(path.join(root, "src/settings.js"), "utf8")).replaceAll(/^export /gm, "");
+const shared = (await Promise.all(["settings.js", "site-theme.js"].map(name => readFile(path.join(root, "src", name), "utf8")))).map(source => source.replaceAll(/^export /gm, "")).join("\n");
 await writeFile(path.join(out, "content.js"), `{\n${shared}\n${await readFile(path.join(root, "src/content.js"), "utf8")}\n}\n`);
 await mkdir(path.join(out, "licenses"), { recursive: true });
 await cp(path.join(pdfRoot, "LICENSE"), path.join(out, "licenses/PDFJS-LICENSE"));

@@ -1,6 +1,6 @@
 {
   "name": "ink-browser",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "墨阅：网页与 PDF 深色阅读，保留图片原色",

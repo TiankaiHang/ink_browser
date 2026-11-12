@@ -1,4 +1,4 @@
-// settings.js is prepended by the build, keeping content scripts in the isolated world.
+// Shared settings and site adapters are prepended in the isolated world.
 (() => {
   if (!globalThis.chrome?.runtime?.id || document.documentElement?.dataset.inkContent) return;
   let style;
@@ -7,6 +7,7 @@
   const reader = chrome.runtime.getURL("viewer.html");
   const texture = chrome.runtime.getURL("assets/paper.svg");
   const embedded = new Map();
+  const feishuTheme = createFeishuNativeTheme(document);
   DarkReader.setFetchMethod(async url => {
     const result = await chrome.runtime.sendMessage({ type: "FETCH_CSS", url });
     if (result.error) throw new Error(result.error);
@@ -45,15 +46,25 @@
     document.body?.classList.remove("ink-paper-surface");
     if (state.enabled && state.webEnabled && !isExcluded(location.href, state)) {
       const theme = THEMES[state.material];
-      DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
+      if (isFeishuDrive(location.href)) {
+        // Feishu has a complete native dark palette. Running a second engine
+        // over it can recolor text while missing dynamic background tokens.
+        DarkReader.disable();
+        feishuTheme.enable(theme);
+      } else {
+        feishuTheme.disable();
+        DarkReader.enable({ darkSchemeBackgroundColor: theme.background, darkSchemeTextColor: theme.foreground, scrollbarColor: "auto", selectionColor: "auto" }, { ignoreImageAnalysis: ["*"], disableStyleSheetsProxy: true });
+      }
       document.documentElement.dataset.inkMaterial = state.material;
       if (document.body && getComputedStyle(document.body).backgroundImage === "none") document.body.classList.add("ink-paper-surface");
       style = document.createElement("style");
       style.textContent = `html[data-ink-material="paper"] body.ink-paper-surface { background-image: url("${texture}") !important; background-repeat: repeat !important; background-size: 180px 180px !important; }
-        html[data-ink-material="frost"] body.ink-paper-surface { background-image: radial-gradient(ellipse at 10% 0%, rgba(130,155,180,.07), transparent 65%) !important; }
-        html[data-ink-material] img, html[data-ink-material] video, html[data-ink-material] canvas, html[data-ink-material] picture { filter: none !important; }`;
+        html[data-ink-material="frost"] body.ink-paper-surface { background-image: radial-gradient(ellipse at 10% 0%, rgba(130,155,180,.07), transparent 65%) !important; }`;
       (document.head || document.documentElement).append(style);
-    } else DarkReader.disable();
+    } else {
+      feishuTheme.disable();
+      DarkReader.disable();
+    }
     if (!state.enabled || !state.pdfEnabled || isExcluded(location.href, state)) {
       for (const [frame, node] of embedded) frame.replaceWith(node);
       embedded.clear();
